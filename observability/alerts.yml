@@ -1,0 +1,155 @@
+# Alert rules for the hospital vitals pipeline.
+#
+# Two families:
+#   * PIPELINE HEALTH  -- is data flowing? (IngestionSilence, PipelineComponentStalled,
+#                         ServingDataStale, BatchLate, DataQualityFailed, ApiErrorRateHigh)
+#   * CLINICAL URGENCY -- is a patient deteriorating? (CriticalPatientDeterioration,
+#                         CriticalVitalsSpike)
+#
+# Every rule below references a metric that is ACTUALLY exported by this
+# codebase (see the "source" comment on each) -- deliberately not stubbing
+# rules against metrics nothing produces (e.g. Kafka consumer-group lag would
+# need a kafka-lag-exporter sidecar, and per-micro-batch duration histograms
+# would need custom Spark instrumentation; neither is implemented here, and
+# both are named explicitly in the report's Limitations section rather than
+# faked with a rule that would sit permanently "pending").
+#
+# "Watchdog" is a standard Prometheus pattern: an alert that is ALWAYS
+# firing, used to prove the Prometheus -> Alertmanager -> receiver pipeline
+# itself is alive (if Watchdog stops firing, alerting is broken, not the
+# system it monitors).
+groups:
+  - name: meta
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "Alerting pipeline is alive (always-firing watchdog)."
+
+  # --- Ingestion ---------------------------------------------------------
+  # source: ingestion/vitals_producer.py (:8001), ingestion/lab_batch_producer.py (:8002)
+  - name: ingestion
+    rules:
+      - alert: IngestionSilence
+        # HEALTH CHECK 1: no vitals event acknowledged by Kafka for > 30 s.
+        # vitals_last_emit_timestamp_seconds advances on every broker ack and
+        # is initialised at producer start, so a restart is not misread as
+        # silence. `absent()` covers the producer being down entirely
+        # (target missing -> no series at all). The 5 s scrape interval for
+        # this job in prometheus.yml keeps detection latency near the 30 s
+        # threshold plus `for`.
+        expr: (time() - vitals_last_emit_timestamp_seconds > 30) or absent(vitals_last_emit_timestamp_seconds)
+        for: 10s
+        labels:
+          severity: critical
+        annotations:
+          summary: "No vitals events received by Kafka for more than 30 seconds."
+          description: "vitals-producer may be down, or Kafka is unreachable from it."
+
+      - alert: LabFileMissing
+        # 450s = 1.5x the default SIM_DAY_SECONDS=300 in .env. Prometheus
+        # rule files are static YAML (no env-var substitution), so if you
+        # change SIM_DAY_SECONDS, update this threshold to match.
+        #
+        # Guarded with "> 0": the gauge defaults to 0 until the FIRST lab
+        # file is ever written, and time() - 0 is always a huge number --
+        # without this guard the alert would fire immediately and
+        # permanently from container startup until the first lab file lands.
+        expr: (time() - lab_file_last_written_timestamp_seconds > 450) and (lab_file_last_written_timestamp_seconds > 0)
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No daily lab file written in 1.5x the expected sim-day interval."
+
+      - alert: LabKafkaPublishErrors
+        expr: increase(lab_kafka_publish_errors_total[10m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Lab rows failed delivery to the lab_batch Kafka topic (the CSV file drop is unaffected)."
+
+  # --- Speed layer / storage ----------------------------------------------
+  # source: serving/api.py's background gauge poller, reading
+  # ops.pipeline_heartbeat and speed.patient_vitals_1m (populated by
+  # processing/stream_job.py and processing/raw_archiver.py)
+  - name: speed_layer
+    rules:
+      - alert: PipelineComponentStalled
+        expr: ops_pipeline_heartbeat_last_seen_seconds > 120
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.service }} has not reported a heartbeat in over 2 minutes."
+
+      - alert: ServingDataStale
+        expr: speed_latest_window_age_seconds > 180
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The most recent speed-layer window is over 3 minutes old."
+
+  # --- Clinical urgency ----------------------------------------------------
+  # source: serving/api.py's poller over serving.patient_360 / speed.vitals_alerts.
+  - name: clinical
+    rules:
+      - alert: CriticalPatientDeterioration
+        # HEALTH CHECK 2 (clinical): the speed layer's worst-case NEWS2 band
+        # for a patient is 'high' in a fresh window. The per-patient series
+        # (ward_patient_high_risk) puts the patient in the alert labels.
+        expr: ward_patient_high_risk == 1
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.patient_id }} ({{ $labels.ward }}) is in the HIGH NEWS2 risk band."
+          description: "Sustained deterioration: see GET /api/v1/patients/{{ $labels.patient_id }}/risk."
+
+      - alert: CriticalVitalsSpike
+        # The fast path: at least one single-reading critical breach
+        # (SpO2 < 90, HR > 130, ...) landed in speed.vitals_alerts in the last minute.
+        expr: ward_spike_alerts_last_minute > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $value }} immediate critical-vitals alert(s) raised in the last minute."
+          description: "See the 'Immediate spike alerts' panel on the Ward Clinical Dashboard."
+
+  # --- Batch layer / data quality -----------------------------------------
+  # source: serving/api.py's poller, reading ops.batch_runs and ops.data_quality
+  # (populated by processing/batch_job.py and orchestration/dags/*)
+  - name: batch_layer
+    rules:
+      - alert: BatchLate
+        expr: ops_batch_last_success_seconds > 720
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No successful batch run in the last 12 minutes."
+
+      - alert: DataQualityFailed
+        expr: ops_data_quality_critical_failures > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "A critical data-quality rule failed for the most recent sim_day checked."
+
+  # --- Serving API ---------------------------------------------------------
+  # source: prometheus-fastapi-instrumentator, auto-instrumented in serving/api.py
+  - name: serving_api
+    rules:
+      - alert: ApiErrorRateHigh
+        expr: |
+          rate(http_requests_total{job="api",status=~"5.."}[5m])
+          / rate(http_requests_total{job="api"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API 5xx error rate above 5% over 5 minutes."

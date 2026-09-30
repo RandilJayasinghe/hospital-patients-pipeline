@@ -1,0 +1,48 @@
+# Prometheus scrape configuration.
+#
+# One job per instrumented component; a target that is not running is simply
+# reported as "down" (Prometheus does not crash).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # --- Ingestion producers ------------------------------------------------
+  # vitals-producer is scraped every 5s (not the global 15s) so the 30-second
+  # IngestionSilence rule detects silence promptly.
+  - job_name: vitals-producer
+    scrape_interval: 5s
+    static_configs:
+      - targets: ["vitals-producer:8001"]
+
+  - job_name: lab-producer
+    static_configs:
+      - targets: ["lab-producer:8002"]
+
+  # --- Phase 3/4: Spark jobs (PrometheusServlet) ------------------------
+  - job_name: spark-stream
+    metrics_path: /metrics/executors/prometheus
+    static_configs:
+      - targets: ["spark-stream:4040"]
+
+  # --- Phase 5: serving API ----------------------------------------------
+  # Serves BOTH the automatic per-route HTTP metrics (prometheus-fastapi-
+  # instrumentator) and the custom pipeline-health gauges the API's
+  # background poller republishes from Postgres (heartbeat age, batch
+  # freshness, data-quality failures) -- see serving/api.py.
+  - job_name: api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]

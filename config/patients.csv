@@ -1,0 +1,19 @@
+patient_id,name,age,sex,ward,bed,admitted_at,baseline_hr,baseline_spo2,baseline_sbp,baseline_dbp,baseline_temp
+P001,Amara Okafor,71,F,ICU,ICU-01,2026-01-01T00:00:00,88,96,118,72,36.9
+P002,Rohan Deshmukh,64,M,ICU,ICU-02,2026-01-01T00:00:00,84,97,122,74,36.8
+P003,Ingrid Halvorsen,78,F,ICU,ICU-03,2026-01-01T00:00:00,90,95,116,70,37.0
+P004,Mateo Vargas,58,M,ICU,ICU-04,2026-01-01T00:00:00,86,96,120,74,36.9
+P005,Yuki Tanabe,69,F,ICU,ICU-05,2026-01-01T00:00:00,89,96,114,70,37.0
+P006,Samuel Achterberg,52,M,General Ward,GW-01,2026-01-01T00:00:00,72,98,118,76,36.6
+P007,Leila Haddad,44,F,General Ward,GW-02,2026-01-01T00:00:00,68,99,112,72,36.5
+P008,Tomasz Wisniewski,63,M,General Ward,GW-03,2026-01-01T00:00:00,78,97,124,80,36.7
+P009,Priya Venkataraman,36,F,General Ward,GW-04,2026-01-01T00:00:00,66,99,114,70,36.5
+P010,Kofi Mensah,81,M,General Ward,GW-05,2026-01-01T00:00:00,84,96,120,76,36.8
+P011,Beatrice Lindqvist,67,F,Cardiology,CD-01,2026-01-01T00:00:00,76,97,128,80,36.7
+P012,Dmitri Volkov,73,M,Cardiology,CD-02,2026-01-01T00:00:00,82,96,132,82,36.8
+P013,Nadia Rahman,59,F,Cardiology,CD-03,2026-01-01T00:00:00,74,97,124,78,36.6
+P014,Hugo Beaumont,66,M,Cardiology,CD-04,2026-01-01T00:00:00,80,96,128,80,36.7
+P015,Chiamaka Eze,47,F,Post-Op,PO-01,2026-01-01T00:00:00,80,97,118,74,37.0
+P016,Lucas Ferreira,55,M,Post-Op,PO-02,2026-01-01T00:00:00,84,96,120,76,37.1
+P017,Sana Mirza,62,F,Post-Op,PO-03,2026-01-01T00:00:00,82,97,122,76,36.9
+P018,Anders Nystrom,70,M,Post-Op,PO-04,2026-01-01T00:00:00,86,96,116,72,37.0

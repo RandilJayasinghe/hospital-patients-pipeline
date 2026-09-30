@@ -1,0 +1,14 @@
+# Tells Grafana to auto-load every dashboard JSON in observability/grafana/dashboards/
+# (Ward Clinical Dashboard + Pipeline Health Dashboard). docker-compose.yml mounts
+# that directory at /var/lib/grafana-dashboards, so nothing needs importing by hand.
+apiVersion: 1
+
+providers:
+  - name: default
+    orgId: 1
+    folder: ""
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana-dashboards
