@@ -249,7 +249,3 @@ Regenerate the Word/PDF report after editing `docs/REPORT.md`: `pip install pypa
 - No PHI security/encryption/audit trail — data is simulated; a real deployment needs all three.
 - The clinical score is a simplified NEWS2 (no respiration rate, consciousness or supplemental-O₂ inputs); it is illustrative, not a validated clinical tool.
 - Simulated-time compression: 1 simulated day = 5 real minutes (§3).
-
-## 13. Individual contributions
-
-*(Group submissions: add each member's contribution here. Delete this section for an individual submission.)*
